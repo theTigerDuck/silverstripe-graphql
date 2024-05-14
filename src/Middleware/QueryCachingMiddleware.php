@@ -45,7 +45,7 @@ class QueryCachingMiddleware implements QueryMiddleware, Flushable
                 __CLASS__
             ));
         }
-        $vars = $vars['vars'] ?? [];
+        $vars = $vars['vars'] ?? $vars;
         $key = $this->generateCacheKey($query, $vars);
 
         // Get successful cache response
@@ -111,7 +111,11 @@ class QueryCachingMiddleware implements QueryMiddleware, Flushable
 
         // On cache success validate against cached classes
         foreach ($cached['classes'] as $class) {
-            $lastEditedDate = DataObject::get($class)->max('LastEdited');
+            if($class == "SilverStripe\Assets\File" && isset($cached['response']['data']['readFiles'])) {
+                $lastEditedDate = DataObject::get($class)->filter(['ParentID' => $cached['response']['data']['readFiles'][0]['id']])->max('LastEdited');
+            } else{
+                $lastEditedDate = DataObject::get($class)->max('LastEdited');
+            }
             if (strtotime($lastEditedDate ?? '') > strtotime($cached['date'] ?? '')) {
                 // class modified, fail validation of cache
                 return null;
