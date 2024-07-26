@@ -111,8 +111,34 @@ class QueryCachingMiddleware implements QueryMiddleware, Flushable
 
         // On cache success validate against cached classes
         foreach ($cached['classes'] as $class) {
+            if(isset($cached['response']['data']['CreateFile'])
+                || isset($cached['response']['data']['CreateFolder'])
+                || isset($cached['response']['data']['DeleteFiles'])
+                || isset($cached['response']['data']['MoveFiles'])
+                || isset($cached['response']['data']['ReadDescendantFileCounts'])
+                || isset($cached['response']['data']['PublicationResultUnion'])
+                || isset($cached['response']['data']['PublicationNotice'])
+                || isset($cached['response']['data']['ReadFileUsage'])
+            ) {
+
+                return null;
+            }
             if($class == "SilverStripe\Assets\File" && isset($cached['response']['data']['readFiles'])) {
-                $lastEditedDate = DataObject::get($class)->filter(['ParentID' => $cached['response']['data']['readFiles'][0]['id']])->max('LastEdited');
+                // WENN Ordner
+                if($cached['response']['data']['readFiles'][0]['category'] == 'folder'){
+                    $lastEditedDate = DataObject::get($class)->filterAny(['ID' => $cached['response']['data']['readFiles'][0]['id'], 'ParentID' => $cached['response']['data']['readFiles'][0]['id']])->max('LastEdited');
+                } else {
+                    $fileObject = DataObject::get($class)->byID($cached['response']['data']['readFiles'][0]['id']);
+                    if($fileObject->ParentID != $cached['response']['data']['readFiles'][0]['parentId']){
+                        //WRONG folder file has been moved
+                        //Dirty hack to flush old folders cache
+                        $oldFolder = Folder::get()->byID($cached['response']['data']['readFiles'][0]['parentId']);
+                        $oldFolder->LastEdited = DBDatetime::now()->getValue();
+                        $oldFolder->write();
+                        return null;
+                    }
+                    $lastEditedDate = DataObject::get($class)->filter(['ParentID' => $cached['response']['data']['readFiles'][0]['parentId']])->max('LastEdited');
+                }
             } else{
                 $lastEditedDate = DataObject::get($class)->max('LastEdited');
             }
@@ -123,7 +149,8 @@ class QueryCachingMiddleware implements QueryMiddleware, Flushable
         }
 
         // On cache success + validation
-        return $cached['response'];
+        return null;
+        //return $cached['response'];
     }
 
     /**
@@ -155,6 +182,7 @@ class QueryCachingMiddleware implements QueryMiddleware, Flushable
 
     public static function flush()
     {
-        static::singleton()->getCache()->clear();
+        //Do nothing never flush
+        //static::singleton()->getCache()->clear();
     }
 }
